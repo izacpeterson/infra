@@ -1,0 +1,9 @@
+services:
+  izacdotcomapi:
+    build:
+      context: /home/ec2-user/izacdotcomapi
+      dockerfile: /home/ec2-user/infra/compose/izacdotcomapi/Dockerfile
+    restart: unless-stopped
+    env_file: /home/ec2-user/izacdotcomapi/.env
+    ports:
+      - "8080:8080"
