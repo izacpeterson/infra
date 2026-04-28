@@ -126,6 +126,8 @@ resource "aws_instance" "apps" {
     #!/bin/bash
     apt-get update
     apt-get install -y ca-certificates curl git unzip
+
+    # Docker
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
     chmod a+r /etc/apt/keyrings/docker.asc
@@ -134,9 +136,16 @@ resource "aws_instance" "apps" {
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     systemctl enable --now docker
     usermod -aG docker ubuntu
+
+    # NVM + Node
+    sudo -u ubuntu bash -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash && source ~/.nvm/nvm.sh && nvm install --lts'
+
+    # AWS CLI
     curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
     unzip -q /tmp/awscliv2.zip -d /tmp
     /tmp/aws/install
+
+    # GitHub SSH key
     ssh-keyscan github.com >> /home/ubuntu/.ssh/known_hosts
     chown ubuntu:ubuntu /home/ubuntu/.ssh/known_hosts
     aws secretsmanager get-secret-value \
@@ -146,9 +155,6 @@ resource "aws_instance" "apps" {
       --output text | tr -d '\r' > /home/ubuntu/.ssh/id_ed25519
     chmod 600 /home/ubuntu/.ssh/id_ed25519
     chown ubuntu:ubuntu /home/ubuntu/.ssh/id_ed25519
-    sudo -u ubuntu git clone git@github.com:izacpeterson/infra.git /home/ubuntu/infra
-    sudo -u ubuntu git clone git@github.com:izacpeterson/izacdotcomapi.git /home/ubuntu/izacdotcomapi
-    docker compose -f /home/ubuntu/infra/compose/docker-compose.yml up -d --build
   EOF
 
   tags = {
@@ -170,9 +176,16 @@ resource "aws_instance" "main" {
     #!/bin/bash
     apt-get update
     apt-get install -y git unzip
+
+    # NVM + Node
+    sudo -u ubuntu bash -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash && source ~/.nvm/nvm.sh && nvm install --lts'
+
+    # AWS CLI
     curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
     unzip -q /tmp/awscliv2.zip -d /tmp
     /tmp/aws/install
+
+    # GitHub SSH key
     ssh-keyscan github.com >> /home/ubuntu/.ssh/known_hosts
     chown ubuntu:ubuntu /home/ubuntu/.ssh/known_hosts
     aws secretsmanager get-secret-value \
@@ -182,7 +195,6 @@ resource "aws_instance" "main" {
       --output text | tr -d '\r' > /home/ubuntu/.ssh/id_ed25519
     chmod 600 /home/ubuntu/.ssh/id_ed25519
     chown ubuntu:ubuntu /home/ubuntu/.ssh/id_ed25519
-    sudo -u ubuntu git clone git@github.com:izacpeterson/js_anon_kv.git /home/ubuntu/js_anon_kv
   EOF
 
   tags = {

@@ -1,0 +1,3 @@
+api.izacpeterson.com {
+	reverse_proxy izacdotcomapi:8080
+}
