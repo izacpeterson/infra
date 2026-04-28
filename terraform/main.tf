@@ -11,13 +11,18 @@ provider "aws" {
   region = "us-east-1"
 }
 
-data "aws_ami" "al2023" {
+data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 }
 
@@ -100,14 +105,14 @@ resource "aws_security_group" "web" {
 
   egress {
     from_port   = 0
-    to_port     = 0
+    to_port  = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
 resource "aws_instance" "apps" {
-  ami                  = data.aws_ami.al2023.id
+  ami                  = data.aws_ami.ubuntu.id
   instance_type        = "t3.micro"
   key_name             = aws_key_pair.izac_key.key_name
   iam_instance_profile = aws_iam_instance_profile.app_server_profile.name
@@ -119,13 +124,31 @@ resource "aws_instance" "apps" {
 
   user_data = <<-EOF
     #!/bin/bash
+    apt-get update
+    apt-get install -y ca-certificates curl git unzip
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" > /etc/apt/sources.list.d/docker.list
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    systemctl enable --now docker
+    usermod -aG docker ubuntu
+    curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+    unzip -q /tmp/awscliv2.zip -d /tmp
+    /tmp/aws/install
+    ssh-keyscan github.com >> /home/ubuntu/.ssh/known_hosts
+    chown ubuntu:ubuntu /home/ubuntu/.ssh/known_hosts
     aws secretsmanager get-secret-value \
       --secret-id github-deploy-key \
       --region us-east-1 \
       --query SecretString \
-      --output text > /home/ec2-user/.ssh/id_ed25519
-    chmod 600 /home/ec2-user/.ssh/id_ed25519
-    chown ec2-user:ec2-user /home/ec2-user/.ssh/id_ed25519
+      --output text | tr -d '\r' > /home/ubuntu/.ssh/id_ed25519
+    chmod 600 /home/ubuntu/.ssh/id_ed25519
+    chown ubuntu:ubuntu /home/ubuntu/.ssh/id_ed25519
+    sudo -u ubuntu git clone git@github.com:izacpeterson/infra.git /home/ubuntu/infra
+    sudo -u ubuntu git clone git@github.com:izacpeterson/izacdotcomapi.git /home/ubuntu/izacdotcomapi
+    docker compose -f /home/ubuntu/infra/compose/docker-compose.yml up -d --build
   EOF
 
   tags = {
@@ -134,7 +157,7 @@ resource "aws_instance" "apps" {
 }
 
 resource "aws_instance" "main" {
-  ami                  = data.aws_ami.al2023.id
+  ami                  = data.aws_ami.ubuntu.id
   instance_type        = "t3.small"
   key_name             = aws_key_pair.izac_key.key_name
   iam_instance_profile = aws_iam_instance_profile.app_server_profile.name
@@ -145,17 +168,21 @@ resource "aws_instance" "main" {
 
   user_data = <<-EOF
     #!/bin/bash
-    dnf install -y git
+    apt-get update
+    apt-get install -y git unzip
+    curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+    unzip -q /tmp/awscliv2.zip -d /tmp
+    /tmp/aws/install
+    ssh-keyscan github.com >> /home/ubuntu/.ssh/known_hosts
+    chown ubuntu:ubuntu /home/ubuntu/.ssh/known_hosts
     aws secretsmanager get-secret-value \
       --secret-id github-deploy-key \
       --region us-east-1 \
       --query SecretString \
-      --output text > /home/ec2-user/.ssh/id_ed25519
-    chmod 600 /home/ec2-user/.ssh/id_ed25519
-    chown ec2-user:ec2-user /home/ec2-user/.ssh/id_ed25519
-    ssh-keyscan github.com >> /home/ec2-user/.ssh/known_hosts
-    chown ec2-user:ec2-user /home/ec2-user/.ssh/known_hosts
-    sudo -u ec2-user git clone git@github.com:izacpeterson/js_anon_kv.git /home/ec2-user/js_anon_kv
+      --output text | tr -d '\r' > /home/ubuntu/.ssh/id_ed25519
+    chmod 600 /home/ubuntu/.ssh/id_ed25519
+    chown ubuntu:ubuntu /home/ubuntu/.ssh/id_ed25519
+    sudo -u ubuntu git clone git@github.com:izacpeterson/js_anon_kv.git /home/ubuntu/js_anon_kv
   EOF
 
   tags = {
@@ -165,7 +192,7 @@ resource "aws_instance" "main" {
 
 output "ssh_commands" {
   value = {
-    apps = "ssh ec2-user@${aws_instance.apps.public_ip}"
-    main = "ssh ec2-user@${aws_instance.main.public_ip}"
+    apps = "ssh ubuntu@${aws_instance.apps.public_ip}"
+    main = "ssh ubuntu@${aws_instance.main.public_ip}"
   }
 }
